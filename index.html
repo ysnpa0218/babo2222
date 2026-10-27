@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="내가 학습한 이미지 분류 AI로 컴퓨터와 가위바위보 대결을 합니다.">
+  <title>AI 가위바위보 대결</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <style>
+    :root {
+      --bg-1: #120a2e; --bg-2: #2a0f5c; --panel: rgba(22, 14, 54, .72); --line: rgba(160, 130, 255, .28);
+      --ink: #f4f1ff; --muted: #b6addb; --you: #2ee6a6; --cpu: #ff4f8b; --gold: #ffd23f; --draw: #8fb8ff;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: #1d0c45; }
+    body { min-height: 100vh; }
+    body {
+      margin: 0; color: var(--ink); overflow-x: hidden;
+      font: 16px/1.55 "Pretendard", system-ui, -apple-system, "Malgun Gothic", sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, #5b2bd6 0%, transparent 60%),
+                  radial-gradient(900px 600px at 100% 100%, #b0186b 0%, transparent 55%),
+                  linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      background-attachment: fixed;
+    }
+    /* 움직이는 네온 바닥 격자 */
+    .grid-floor {
+      position: fixed; left: -50%; right: -50%; bottom: -10vh; height: 55vh; z-index: -1; pointer-events: none;
+      background-image: linear-gradient(rgba(255, 79, 139, .35) 2px, transparent 2px), linear-gradient(90deg, rgba(120, 90, 255, .35) 2px, transparent 2px);
+      background-size: 60px 60px; transform: perspective(500px) rotateX(62deg); transform-origin: bottom;
+      mask-image: linear-gradient(to top, #000 10%, transparent 90%); -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 90%);
+      animation: floor 3s linear infinite;
+    }
+    @keyframes floor { to { background-position: 0 60px; } }
+    .floaters { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+    .floaters span { position: absolute; font-size: 2.2rem; opacity: .14; animation: float 14s ease-in-out infinite; }
+    @keyframes float { 50% { transform: translateY(-40px) rotate(18deg); } }
+    [hidden] { display: none !important; }
+    main { width: min(1240px, 100%); margin: auto; padding: 22px 20px 40px; }
+
+    /* 제목 */
+    header { text-align: center; margin-bottom: 18px; }
+    h1 {
+      font-family: "Black Han Sans", "Pretendard", sans-serif; font-weight: 400; margin: 0;
+      font-size: clamp(2.2rem, 6vw, 4rem); line-height: 1.1; letter-spacing: .02em;
+      background: linear-gradient(90deg, var(--you), #fff 45%, var(--cpu)); -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 4px 18px rgba(255, 79, 139, .35));
+    }
+    header p { color: var(--muted); margin: 6px 0 0; }
+
+    /* 점수판 */
+    .scoreboard { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; margin: 0 auto 18px; max-width: 760px; }
+    .score { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); }
+    .score.cpu { flex-direction: row-reverse; text-align: right; }
+    .score .who { font-weight: 800; letter-spacing: .08em; font-size: .85rem; }
+    .score.you .who { color: var(--you); } .score.cpu .who { color: var(--cpu); }
+    .score .num { font-family: "Black Han Sans", sans-serif; font-size: 2.6rem; line-height: 1; margin-left: auto; }
+    .score.cpu .num { margin-left: 0; margin-right: auto; }
+    .pips { display: flex; gap: 6px; }
+    .pip { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); }
+    .you .pip.on { background: var(--you); border-color: var(--you); box-shadow: 0 0 12px var(--you); }
+    .cpu .pip.on { background: var(--cpu); border-color: var(--cpu); box-shadow: 0 0 12px var(--cpu); }
+    .round { text-align: center; font-weight: 800; color: var(--gold); font-size: .95rem; letter-spacing: .06em; }
+    .round small { display: block; color: var(--muted); font-weight: 500; letter-spacing: 0; }
+
+    /* 경기장 */
+    .arena { display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr); gap: 18px; align-items: stretch; }
+    .side { background: var(--panel); border: 1px solid var(--line); border-radius: 24px; padding: 16px; backdrop-filter: blur(10px); min-width: 0; transition: box-shadow .3s, border-color .3s; }
+    .side.win { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold), 0 0 40px rgba(255, 210, 63, .45); }
+    .side-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: 800; letter-spacing: .06em; }
+    .side.you .side-head { color: var(--you); } .side.cpu .side-head { color: var(--cpu); }
+    .tag { font-size: .75rem; padding: 3px 9px; border-radius: 99px; background: rgba(255,255,255,.08); color: var(--muted); letter-spacing: 0; font-weight: 600; }
+    .stage { position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: rgba(0,0,0,.35); display: grid; place-items: center; }
+    .you .stage { border: 3px solid rgba(46, 230, 166, .5); } .cpu .stage { border: 3px solid rgba(255, 79, 139, .5); }
+    #video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #skeleton { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+    .frame { position: absolute; inset: 14%; border: 2px dashed rgba(255,255,255,.5); border-radius: 16px; z-index: 2; pointer-events: none; }
+    #placeholder { text-align: center; color: var(--muted); padding: 20px; }
+    #placeholder b { display: block; font-size: 3.4rem; margin-bottom: 6px; }
+    .lock { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; padding: 6px 14px; border-radius: 99px; background: rgba(10, 6, 30, .8); font-weight: 800; white-space: nowrap; }
+    #cpu-hand { font-size: clamp(5rem, 14vw, 9rem); line-height: 1; filter: drop-shadow(0 8px 24px rgba(255, 79, 139, .45)); }
+    #cpu-hand.shake { animation: shake .18s linear infinite; }
+    @keyframes shake { 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+    #cpu-name { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-weight: 800; color: var(--muted); }
+    .now { margin-top: 12px; }
+    .now-line { display: flex; justify-content: space-between; font-size: .9rem; color: var(--muted); }
+    .now-line b { color: var(--ink); }
+    .meter { height: 8px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 6px; }
+    .meter div { height: 100%; width: 0; background: linear-gradient(90deg, var(--you), #9cffd9); transition: width .2s; }
+
+    .center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+    .vs { font-family: "Black Han Sans", sans-serif; font-size: 3.4rem; line-height: 1; color: var(--gold); text-shadow: 0 0 22px rgba(255, 210, 63, .7); }
+    #countdown { font-family: "Black Han Sans", sans-serif; font-size: 2.4rem; min-height: 3.2rem; color: #fff; }
+    #countdown.pop { animation: pop .5s ease; }
+    @keyframes pop { 0% { transform: scale(2); opacity: 0; } 60% { transform: scale(.95); opacity: 1; } 100% { transform: scale(1); } }
+
+    /* 결과 배너 */
+    #banner {
+      margin: 18px auto 0; max-width: 760px; text-align: center; padding: 14px 18px; border-radius: 18px;
+      background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); min-height: 72px;
+    }
+    #banner-title { font-family: "Black Han Sans", sans-serif; font-size: clamp(1.6rem, 4vw, 2.4rem); line-height: 1.2; }
+    #banner-sub { color: var(--muted); margin: 2px 0 0; }
+    #banner.win #banner-title { color: var(--gold); } #banner.lose #banner-title { color: var(--cpu); } #banner.draw #banner-title { color: var(--draw); }
+    #banner.flash { animation: pop .45s ease; }
+
+    /* 버튼 */
+    .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    button {
+      font: inherit; font-weight: 800; border-radius: 14px; padding: 12px 22px; min-height: 52px; cursor: pointer;
+      border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--ink); transition: transform .12s, filter .2s;
+    }
+    button.big { font-size: 1.15rem; padding: 14px 34px; border: 0; color: #1a0b33; background: linear-gradient(90deg, var(--gold), #ffa53f); box-shadow: 0 8px 26px rgba(255, 170, 63, .45); }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:active:not(:disabled) { transform: scale(.96); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+    /* 기록 · 설정 */
+    .bottom { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; margin-top: 22px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 16px 18px; backdrop-filter: blur(10px); min-width: 0; }
+    .card h2 { font-size: 1rem; margin: 0 0 10px; letter-spacing: .03em; }
+    #log { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
+    #log li { display: grid; grid-template-columns: 52px 1fr auto; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: .95rem; }
+    #log li:empty { display: none; }
+    #log .r { color: var(--muted); font-size: .82rem; }
+    #log .res { font-weight: 800; }
+    #log .res.win { color: var(--gold); } #log .res.lose { color: var(--cpu); } #log .res.draw { color: var(--draw); }
+    #log-empty { color: var(--muted); font-size: .9rem; margin: 0; }
+    .setting-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; font-size: .92rem; color: var(--muted); }
+    .setting-row strong { color: var(--ink); }
+    #camera-select { font: inherit; font-size: .9rem; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,.3); color: var(--ink); flex: 1 1 200px; min-width: 0; min-height: 42px; }
+    .setting-row button { min-height: 42px; padding: 8px 14px; font-size: .9rem; }
+    input[type="range"] { accent-color: var(--gold); width: 130px; }
+    #status, #model-status { font-size: .88rem; color: var(--muted); margin: 0 0 8px; overflow-wrap: anywhere; }
+    #status.error, #model-status.error { color: #ff9db8; }
+
+    /* 꽃가루 */
+    #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+
+    @media (max-width: 820px) {
+      main { padding: 16px 16px 32px; }
+      .arena { grid-template-columns: 1fr 1fr; }
+      .center { grid-column: 1 / -1; order: -1; flex-direction: row; gap: 18px; }
+      .vs { font-size: 2.4rem; }
+      .bottom { grid-template-columns: 1fr; }
+      .scoreboard { gap: 8px; }
+      .score { padding: 10px 12px; gap: 8px; } .score .num { font-size: 2rem; } .pips { display: none; }
+    }
+    @media (max-width: 480px) { .side { padding: 10px; } .side-head .tag { display: none; } #placeholder { font-size: .72rem; padding: 8px; } #placeholder b { font-size: 2.2rem; } #cpu-hand { font-size: 3.6rem; } #cpu-name { bottom: 6px; font-size: .8rem; } .lock { font-size: .75rem; bottom: 6px; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <!--
+    GitHub 저장소 구성:
+    index.html
+    model/model.json
+    model/metadata.json
+    model/weights.bin
+
+    Teachable Machine에서 '가위', '바위', '보' 세 클래스로 학습한 이미지 모델을
+    TensorFlow.js 형식으로 내보내 model 폴더에 넣으세요.
+    (손이 없는 '배경' 클래스를 하나 더 만들면 인식이 더 안정적입니다.)
+
+    ✏️ 클래스 이름이 다르면 아래 <script> 맨 위 MOVES 부분을 수정하세요.
+  -->
+  <div class="grid-floor" aria-hidden="true"></div>
+  <div class="floaters" aria-hidden="true">
+    <span style="left:6%;top:18%">✌️</span><span style="left:88%;top:12%;animation-delay:-4s">✊</span>
+    <span style="left:12%;top:70%;animation-delay:-8s">🖐️</span><span style="left:80%;top:62%;animation-delay:-2s">✌️</span>
+    <span style="left:48%;top:8%;animation-delay:-6s">✊</span>
+  </div>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <main>
+    <header>
+      <h1 id="page-title">AI 가위바위보 대결</h1>
+      <p>내가 학습시킨 AI가 내 손을 읽는다! 컴퓨터를 이겨보세요.</p>
+    </header>
+
+    <div class="scoreboard" aria-label="점수판">
+      <div class="score you"><div><div class="who">YOU</div><div class="pips" id="you-pips"></div></div><div class="num" id="you-score">0</div></div>
+      <div class="round" id="round-label">ROUND 1<small id="rule-label">3판 2선승</small></div>
+      <div class="score cpu"><div><div class="who">CPU</div><div class="pips" id="cpu-pips"></div></div><div class="num" id="cpu-score">0</div></div>
+    </div>
+
+    <div class="arena">
+      <section class="side you" id="side-you" aria-label="나">
+        <div class="side-head">🙋 PLAYER <span class="tag">웹캠</span></div>
+        <div class="stage">
+          <span class="frame" id="frame" hidden></span>
+          <p id="placeholder"><b>📷</b>아래 '웹캠 시작'을 누르고<br>손을 점선 안에 보여주세요.</p>
+          <video id="video" autoplay muted playsinline aria-label="실시간 웹캠 영상" hidden></video>
+          <canvas id="skeleton" width="400" height="400" aria-hidden="true" hidden></canvas>
+          <div class="lock" id="you-lock" hidden></div>
+        </div>
+        <div class="now">
+          <div class="now-line"><span>AI가 보는 내 손</span><b id="now-label">—</b></div>
+          <div class="meter"><div id="now-meter"></div></div>
+        </div>
+      </section>
+
+      <div class="center">
+        <div class="vs">VS</div>
+        <div id="countdown" aria-live="assertive"></div>
+      </div>
+
+      <section class="side cpu" id="side-cpu" aria-label="컴퓨터">
+        <div class="side-head">🤖 COMPUTER <span class="tag">랜덤</span></div>
+        <div class="stage">
+          <div id="cpu-hand">❔</div>
+          <div id="cpu-name">대기 중</div>
+        </div>
+        <div class="now">
+          <div class="now-line"><span>컴퓨터의 선택</span><b id="cpu-label">—</b></div>
+          <div class="meter"><div id="cpu-meter" style="background:linear-gradient(90deg,var(--cpu),#ffb0c9)"></div></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="banner" aria-live="polite">
+      <div id="banner-title">준비되면 게임 시작!</div>
+      <p id="banner-sub">웹캠을 켜고 모델이 연결되면 시작할 수 있어요.</p>
+    </div>
+
+    <div class="actions">
+      <button id="camera-start" type="button">📷 웹캠 시작</button>
+      <button id="play" class="big" type="button" disabled>▶ 게임 시작</button>
+      <button id="reset" type="button">↺ 처음부터</button>
+    </div>
+
+    <div class="bottom">
+      <section class="card" aria-labelledby="log-heading">
+        <h2 id="log-heading">📜 라운드 기록</h2>
+        <p id="log-empty">아직 기록이 없어요.</p>
+        <ul id="log"></ul>
+      </section>
+      <section class="card" aria-labelledby="set-heading">
+        <h2 id="set-heading">⚙️ 설정</h2>
+        <p id="status" role="status" aria-live="polite">웹캠 시작을 눌러주세요.</p>
+        <p id="model-status" role="status" aria-live="polite">모델은 GitHub의 model 폴더에서 자동으로 연결됩니다.</p>
+        <div class="setting-row">
+          <select id="camera-select" disabled aria-label="사용할 카메라"><option value="">기본 카메라</option></select>
+          <button id="camera-stop" type="button" disabled>⏹ 정지</button>
+        </div>
+        <div class="setting-row">
+          <button id="model-button" type="button">🧠 모델 파일 연결</button>
+          <input id="model-input" type="file" accept=".json,.bin" multiple hidden>
+        </div>
+        <div class="setting-row">
+          <label for="threshold">확신 기준</label><input id="threshold" type="range" min="30" max="95" step="5" value="60"><strong id="threshold-value">60%</strong>
+        </div>
+        <div class="setting-row">
+          <label for="target">승리 조건</label>
+          <select id="target" style="font:inherit;padding:6px 8px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--ink)">
+            <option value="2">3판 2선승</option><option value="3" >5판 3선승</option><option value="1">단판 승부</option>
+          </select>
+          <label style="display:inline-flex;gap:6px;align-items:center;margin-left:auto"><input id="sound-toggle" type="checkbox" checked> 효과음</label>
+        </div>
+        <p style="margin:0;font-size:.8rem;color:var(--muted)">단축키 <b>Space</b> 게임 시작·다음 라운드</p>
+      </section>
+    </div>
+    <noscript><p>이 페이지를 사용하려면 브라우저의 JavaScript를 켜주세요.</p></noscript>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+      // =====================================================================
+      // ✏️ 여기를 수정하세요
+      // names: Teachable Machine에서 정한 클래스 이름(여러 개 가능, 대소문자 무시)
+      // =====================================================================
+      const PAGE_TITLE = "AI 가위바위보 대결";
+      const MOVES = {
+        scissors: { names: ["가위", "scissors"], emoji: "✌️", label: "가위" },
+        rock:     { names: ["바위", "주먹", "rock"], emoji: "✊", label: "바위" },
+        paper:    { names: ["보", "보자기", "paper"], emoji: "🖐️", label: "보" }
+      };
+      const COUNT_WORDS = ["가위", "바위", "보!"];   // 카운트다운 구호
+      const COUNT_MS = 650;                          // 구호 사이 간격(ms)
+      // =====================================================================
+
+      const BEATS = { rock: "scissors", scissors: "paper", paper: "rock" };
+      const MODEL_BASE = "./model/";
+      const MIRROR_CAMERA = true;
+      const $ = (id) => document.getElementById(id);
+      const video = $("video");
+      const inputCanvas = document.createElement("canvas");
+      inputCanvas.width = inputCanvas.height = 400;
+      const inputCtx = inputCanvas.getContext("2d");
+      const frameProbe = document.createElement("canvas");
+      frameProbe.width = frameProbe.height = 32;
+      const probeCtx = frameProbe.getContext("2d", { willReadFrequently: true });
+      const cameraSelect = $("camera-select");
+      let stream = null, opening = false, mode = "idle", inputEpoch = 0;
+      let cameraTimer = null, cameraHint = null, inference = null;
+      let model = null, modelLoading = false, modelTask = 0, autoAttempted = false;
+      let modelKind = "image"; const libraryPromises = {}; // "image" = 이미지 프로젝트, "pose" = 포즈 프로젝트
+      const skeletonCtx = $("skeleton").getContext("2d");
+      let frameState = "waiting", frameStateSince = 0, frameMessage = "";
+      let cameraName = "카메라", lastVideoTime = -1, lastVideoAdvance = 0;
+      let smoothed = [], labels = [], current = null; // current = { move, className, percent }
+      // 게임 상태
+      let phase = "idle", round = 1, youScore = 0, cpuScore = 0;
+      document.title = PAGE_TITLE;
+      $("page-title").textContent = PAGE_TITLE;
+      video.style.transform = MIRROR_CAMERA ? "scaleX(-1)" : "none";
+
+      const target = () => Number($("target").value);
+      const threshold = () => Number($("threshold").value);
+      $("threshold").addEventListener("input", () => { $("threshold-value").textContent = threshold() + "%"; });
+      function moveOf(className) {
+        const key = String(className).trim().toLowerCase();
+        for (const [move, info] of Object.entries(MOVES)) if (info.names.some((n) => n.toLowerCase() === key)) return move;
+        return null;
+      }
+
+      // ---------- 효과음 ----------
+      let audioCtx = null;
+      function tone(freq, length = 0.15, type = "square", delay = 0, volume = 0.12) {
+        if (!$("sound-toggle").checked) return;
+        try {
+          audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          const t = audioCtx.currentTime + delay;
+          const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+          osc.type = type; osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(volume, t + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start(t); osc.stop(t + length + 0.02);
+        } catch {}
+      }
+      const sfx = {
+        tick: () => tone(660, 0.12),
+        go: () => tone(990, 0.22),
+        win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "triangle", i * 0.11)),
+        lose: () => [392, 330, 262].forEach((f, i) => tone(f, 0.22, "sawtooth", i * 0.14, 0.08)),
+        draw: () => [440, 440].forEach((f, i) => tone(f, 0.12, "sine", i * 0.15)),
+        champion: () => [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(f, 0.2, "triangle", i * 0.12))
+      };
+
+      // ---------- 꽃가루 ----------
+      const confettiCanvas = $("confetti"), cctx = confettiCanvas.getContext("2d");
+      let particles = [], confettiRunning = false;
+      function confetti() {
+        confettiCanvas.width = innerWidth; confettiCanvas.height = innerHeight;
+        const colors = ["#ffd23f", "#2ee6a6", "#ff4f8b", "#8fb8ff", "#ffffff"];
+        for (let i = 0; i < 160; i++) particles.push({
+          x: innerWidth / 2 + (Math.random() - .5) * 200, y: innerHeight * .35,
+          vx: (Math.random() - .5) * 14, vy: -Math.random() * 14 - 4, size: 6 + Math.random() * 6,
+          color: colors[i % colors.length], rot: Math.random() * 6, life: 0
+        });
+        if (!confettiRunning) { confettiRunning = true; requestAnimationFrame(stepConfetti); }
+      }
+      function stepConfetti() {
+        cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        particles.forEach((p) => {
+          p.vy += 0.35; p.x += p.vx; p.y += p.vy; p.rot += 0.15; p.life++;
+          cctx.save(); cctx.translate(p.x, p.y); cctx.rotate(p.rot);
+          cctx.fillStyle = p.color; cctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); cctx.restore();
+        });
+        particles = particles.filter((p) => p.y < innerHeight + 40 && p.life < 300);
+        if (particles.length) requestAnimationFrame(stepConfetti);
+        else { confettiRunning = false; cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); }
+      }
+
+      // ---------- 화면 갱신 ----------
+      function status(message, error = false) { $("status").textContent = message; $("status").classList.toggle("error", error); }
+      function modelStatus(message, error = false) { $("model-status").textContent = message; $("model-status").classList.toggle("error", error); }
+      function banner(title, sub = "", kind = "") {
+        $("banner").className = kind; void $("banner").offsetWidth; if (kind) $("banner").classList.add("flash");
+        $("banner-title").textContent = title; $("banner-sub").textContent = sub;
+      }
+      function renderScore() {
+        $("you-score").textContent = youScore; $("cpu-score").textContent = cpuScore;
+        const pips = (el, n) => { el.replaceChildren(...Array.from({ length: target() }, (_, i) => { const d = document.createElement("span"); d.className = "pip" + (i < n ? " on" : ""); return d; })); };
+        pips($("you-pips"), youScore); pips($("cpu-pips"), cpuScore);
+        const rule = { 1: "단판 승부", 2: "3판 2선승", 3: "5판 3선승" }[target()];
+        $("round-label").firstChild.textContent = phase === "over" ? "GAME OVER" : "ROUND " + round;
+        $("rule-label").textContent = rule;
+      }
+      function buttons() {
+        $("camera-start").disabled = opening || Boolean(stream);
+        $("camera-stop").disabled = !opening && mode === "idle";
+        cameraSelect.disabled = opening || cameraSelect.options.length < 2;
+        const ready = mode === "camera" && model && !modelLoading;
+        $("play").disabled = !ready || phase === "countdown";
+        $("play").textContent = phase === "over" ? "🏆 다시 대결" : phase === "reveal" ? "▶ 다음 라운드" : "▶ 게임 시작";
+        $("target").disabled = phase === "countdown" || phase === "reveal";
+      }
+      function showNow() {
+        if (!current) { $("now-label").textContent = "—"; $("now-meter").style.width = "0%"; return; }
+        const info = MOVES[current.move];
+        const sure = current.move && current.percent >= threshold();
+        $("now-label").textContent = sure ? info.emoji + " " + info.label + " " + current.percent.toFixed(0) + "%" : "🤔 " + current.className + " " + current.percent.toFixed(0) + "%";
+        $("now-meter").style.width = current.percent + "%";
+      }
+
+      // ---------- 카메라 · 모델 (기존 구조 유지) ----------
+      function resetInput() {
+        inputEpoch++;
+        clearTimeout(cameraTimer); clearTimeout(cameraHint); cameraTimer = cameraHint = null;
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        stream = null; opening = false;
+        frameState = "waiting"; frameStateSince = 0; frameMessage = "";
+        lastVideoTime = -1; lastVideoAdvance = 0;
+        video.pause(); video.srcObject = null; video.hidden = true;
+        $("frame").hidden = true; $("placeholder").hidden = false;
+        mode = "idle"; smoothed = []; current = null; showNow(); skeletonCtx.clearRect(0, 0, 400, 400);
+        if (phase === "countdown") cancelRound("카메라가 꺼져서 라운드를 취소했어요.");
+        buttons();
+      }
+      function dispose(candidate) { candidate?.model?.dispose?.(); }
+      async function refreshCameras(epoch = inputEpoch) {
+        if (!navigator.mediaDevices?.enumerateDevices) return;
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          if (epoch !== inputEpoch) return;
+          const selected = stream?.getVideoTracks()[0]?.getSettings?.().deviceId || cameraSelect.value;
+          cameraSelect.replaceChildren();
+          const def = document.createElement("option"); def.value = ""; def.textContent = "브라우저 기본 카메라"; cameraSelect.append(def);
+          devices.filter((d) => d.kind === "videoinput" && d.deviceId).forEach((d, i) => {
+            const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || "카메라 " + (i + 1); cameraSelect.append(o);
+          });
+          cameraSelect.value = Array.from(cameraSelect.options).some((o) => o.value === selected) ? selected : "";
+          buttons();
+        } catch {}
+      }
+      function isDarkUniformFrame(pixels) {
+        let sum = 0, squares = 0, maximum = 0; const count = pixels.length / 4;
+        if (!count) return false;
+        for (let i = 0; i < pixels.length; i += 4) {
+          const b = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+          sum += b; squares += b * b; maximum = Math.max(maximum, b);
+        }
+        const mean = sum / count;
+        return mean < 45 && maximum < 60 && Math.max(0, squares / count - mean * mean) < 20;
+      }
+      function inspectCameraFrame() {
+        const track = stream?.getVideoTracks()[0]; const now = performance.now();
+        if (!track || track.readyState === "ended" || track.muted || !track.enabled) return "waiting";
+        if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) return "waiting";
+        if (video.currentTime !== lastVideoTime) { lastVideoTime = video.currentTime; lastVideoAdvance = now; }
+        if (video.paused || now - lastVideoAdvance > 5000) return "waiting";
+        try { probeCtx.drawImage(video, 0, 0, 32, 32); return isDarkUniformFrame(probeCtx.getImageData(0, 0, 32, 32).data) ? "dark" : "ready"; }
+        catch { return "unreadable"; }
+      }
+      function reportCameraFrame(next) {
+        const now = performance.now();
+        if (next !== frameState) { frameState = next; frameStateSince = now; }
+        let message;
+        if (next === "ready") message = cameraName + " · 영상이 들어오고 있습니다.";
+        else {
+          current = null; showNow();
+          if (now - frameStateSince < 2000) message = cameraName + " · 카메라 영상을 확인하고 있습니다.";
+          else if (next === "dark") message = "영상이 매우 어둡습니다. 카메라 가림막이나 차단 키를 확인하거나 다른 카메라를 선택하세요.";
+          else if (next === "unreadable") message = "카메라 영상을 읽지 못했습니다. 정지 후 다시 시작해주세요.";
+          else message = "새 영상이 들어오지 않습니다. 카메라 차단 설정을 확인하거나 다른 카메라를 선택하세요.";
+        }
+        if (message !== frameMessage) { frameMessage = message; status(message, next !== "ready" && now - frameStateSince >= 2000); }
+      }
+      function loadScript(url) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement("script"); s.src = url; s.async = true;
+          const timeout = setTimeout(() => finish(new Error("다운로드 시간 초과")), 12000);
+          function finish(error) { clearTimeout(timeout); s.onload = s.onerror = null; if (error) { s.remove(); reject(error); } else resolve(); }
+          s.onload = () => finish(); s.onerror = () => finish(new Error("AI 라이브러리 다운로드 실패"));
+          document.head.append(s);
+        });
+      }
+      // 이미지 모델과 포즈 모델은 서로 다른 라이브러리를 씁니다.
+      const LIBS = {
+        image: ["tmImage", "@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"],
+        pose:  ["tmPose",  "@teachablemachine/pose@0.8.6/dist/teachablemachine-pose.min.js"]
+      };
+      async function ensureLibraries(kind) {
+        const [globalName] = LIBS[kind];
+        if (window.tf && window[globalName]) return;
+        if (!libraryPromises[kind]) libraryPromises[kind] = (async () => {
+          for (const [g, file] of [["tf", "@tensorflow/tfjs@1.3.1/dist/tf.min.js"], LIBS[kind]]) {
+            if (window[g]) continue;
+            try { await loadScript("https://cdn.jsdelivr.net/npm/" + file); }
+            catch { if (!window[g]) await loadScript("https://unpkg.com/" + file); }
+            if (!window[g]) throw new Error("AI 라이브러리 초기화 실패");
+          }
+        })();
+        try { await libraryPromises[kind]; }
+        catch { libraryPromises[kind] = null; throw new Error("AI 실행 도구를 불러오지 못했습니다. 인터넷 연결이나 학교 네트워크 차단 여부를 확인해주세요."); }
+      }
+      // metadata.json을 읽어 이미지 모델인지 포즈 모델인지 판단합니다.
+      function kindOf(meta) {
+        const text = JSON.stringify(meta || {}).toLowerCase();
+        return text.includes("teachablemachine/pose") || meta?.modelSettings?.posenet ? "pose" : "image";
+      }
+      async function readMeta(fileOrUrl) {
+        try {
+          if (typeof fileOrUrl === "string") { const r = await fetch(fileOrUrl, { cache: "no-store" }); return r.ok ? await r.json() : null; }
+          return JSON.parse(await fileOrUrl.text());
+        } catch { return null; }
+      }
+      async function connectModel(files) {
+        const task = ++modelTask; modelLoading = true; autoAttempted = true;
+        const previous = model; model = null; buttons();
+        modelStatus("학습 모델을 연결하는 중입니다…");
+        let candidate = null;
+        try {
+          if (inference) await inference.catch(() => {});
+          dispose(previous);
+          if (task !== modelTask) return;
+          if (!files && location.protocol === "file:") throw new Error("'모델 파일 연결'을 눌러 model.json, metadata.json, weights.bin을 함께 선택해주세요.");
+          let topology, metadata, weights;
+          if (files) {
+            topology = files.find((f) => f.name === "model.json");
+            metadata = files.find((f) => f.name === "metadata.json");
+            weights = files.filter((f) => f.name.endsWith(".bin"));
+            if (!topology || !metadata || weights.length !== 1) throw new Error("model.json, metadata.json, 가중치(.bin) 파일 1개를 한 번에 선택해주세요.");
+          }
+          let kind = "image";
+          if (files) kind = kindOf(await readMeta(metadata));
+          else {
+            for (const base of [...new Set([MODEL_BASE, "./"])]) {
+              const meta = await readMeta(base + "metadata.json");
+              if (meta) { kind = kindOf(meta); break; }
+            }
+          }
+          await ensureLibraries(kind);
+          if (task !== modelTask) return;
+          const lib = kind === "pose" ? window.tmPose : window.tmImage;
+          if (files) candidate = await lib.loadFromFiles(topology, weights[0], metadata);
+          else {
+            for (const base of [...new Set([MODEL_BASE, "./"])]) {
+              try { candidate = await lib.load(base + "model.json", base + "metadata.json"); break; }
+              catch (error) { console.warn("모델 경로 확인:", base, error); }
+            }
+            if (!candidate) throw new Error("학습 모델을 찾지 못했습니다. '모델 파일 연결'로 파일 3개를 선택하거나 GitHub의 model 폴더를 확인해주세요.");
+          }
+          if (task !== modelTask) { dispose(candidate); return; }
+          const modelLabels = candidate.getClassLabels();
+          if (!Array.isArray(modelLabels) || !modelLabels.length) throw new Error("분류 이름이 없는 모델입니다.");
+          const missing = Object.keys(MOVES).filter((m) => !modelLabels.some((l) => moveOf(l) === m));
+          model = candidate; labels = modelLabels; smoothed = []; modelKind = kind;
+          $("skeleton").hidden = kind !== "pose";
+          skeletonCtx.clearRect(0, 0, 400, 400);
+          modelLoading = false;
+          if (missing.length) modelStatus("⚠️ 연결은 됐지만 " + missing.map((m) => MOVES[m].label).join("·") + " 클래스를 찾지 못했어요. 클래스 이름: " + modelLabels.join(" / ") + " → 코드 맨 위 MOVES를 수정하세요.", true);
+          else modelStatus("✅ " + (kind === "pose" ? "포즈 모델" : "이미지 모델") + " 연결 완료 · " + modelLabels.join(" / "));
+          if (mode === "camera") banner("준비 완료!", kind === "pose"
+            ? "포즈 모델은 손가락이 아니라 팔·몸 동작을 읽어요. 1~2m 떨어져 상체가 보이게 서세요."
+            : "'게임 시작'을 누르거나 Space 키를 누르세요.");
+        } catch (error) {
+          if (candidate && candidate !== model) dispose(candidate);
+          if (task === modelTask) { console.error(error); modelStatus(error.message || "모델을 연결하지 못했습니다.", true); }
+        } finally { if (task === modelTask) modelLoading = false; buttons(); }
+      }
+      function crop(source, width, height, mirror, targetCtx) {
+        if (!width || !height) return false;
+        const side = Math.min(width, height), size = targetCtx.canvas.width;
+        targetCtx.save(); targetCtx.clearRect(0, 0, size, size);
+        if (mirror) { targetCtx.translate(size, 0); targetCtx.scale(-1, 1); }
+        targetCtx.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, size, size);
+        targetCtx.restore();
+        return true;
+      }
+      async function classify(epoch) {
+        if (!model || modelLoading || inference || epoch !== inputEpoch || frameState !== "ready") return;
+        const activeModel = model, activeTask = modelTask;
+        if (!(video.readyState >= 2 && crop(video, video.videoWidth, video.videoHeight, MIRROR_CAMERA, inputCtx))) return;
+        const job = Promise.resolve().then(async () => {
+          if (modelKind !== "pose") return activeModel.predict(inputCanvas);
+          // 포즈 모델: 먼저 몸의 관절을 찾고, 그 관절 정보로 동작을 분류합니다.
+          const { pose, posenetOutput } = await activeModel.estimatePose(inputCanvas);
+          skeletonCtx.clearRect(0, 0, 400, 400);
+          if (pose && window.tmPose) {
+            tmPose.drawKeypoints(pose.keypoints, 0.5, skeletonCtx, 6, "#2ee6a6", "#ffffff");
+            tmPose.drawSkeleton(pose.keypoints, 0.5, skeletonCtx, 4, "#2ee6a6");
+          }
+          return activeModel.predict(posenetOutput);
+        });
+        inference = job;
+        try {
+          const predictions = await job;
+          if (epoch !== inputEpoch || activeModel !== model || activeTask !== modelTask) return;
+          if (!predictions.length || predictions.some((p) => !Number.isFinite(p.probability))) throw new Error("올바른 분류 결과를 받지 못했습니다.");
+          predictions.forEach((p, i) => { const v = Math.max(0, Math.min(1, p.probability)); smoothed[i] = smoothed[i] === undefined ? v : smoothed[i] * 0.5 + v * 0.5; });
+          let best = 0; smoothed.forEach((v, i) => { if (v > smoothed[best]) best = i; });
+          current = { move: moveOf(predictions[best].className), className: predictions[best].className, percent: smoothed[best] * 100 };
+          showNow();
+        } catch (error) {
+          if (epoch === inputEpoch && activeTask === modelTask) { model = null; dispose(activeModel); const msg = /dimension|shape/i.test(error.message || "") ? "모델 종류와 페이지가 맞지 않습니다. 모델을 다시 연결해주세요." : (error.message || "모델을 다시 연결해주세요.");
+            modelStatus("AI 분석 오류: " + msg, true); buttons(); }
+        } finally { if (inference === job) inference = null; }
+      }
+      async function cameraLoop(epoch) {
+        if (epoch !== inputEpoch || mode !== "camera" || !stream) return;
+        reportCameraFrame(inspectCameraFrame());
+        if (frameState === "ready") await classify(epoch);
+        if (epoch === inputEpoch && mode === "camera") cameraTimer = setTimeout(() => cameraLoop(epoch), 120);
+      }
+      function cameraError(error) {
+        return ({
+          NotAllowedError: "카메라 사용이 차단되었습니다. 주소창 왼쪽 사이트 설정에서 카메라를 허용해주세요.",
+          NotFoundError: "연결된 카메라를 찾지 못했습니다. 웹캠 연결을 확인해주세요.",
+          NotReadableError: "카메라를 열 수 없습니다. Zoom·Teams·카메라 앱 등에서 사용 중인지 확인해주세요.",
+          OverconstrainedError: "선택한 카메라를 사용할 수 없습니다. 다른 카메라를 선택해주세요.",
+          SecurityError: "이 페이지에서 카메라 접근이 제한되었습니다. HTTPS 주소로 접속해주세요."
+        })[error.name] || error.message || "카메라를 시작하지 못했습니다.";
+      }
+      async function startCamera() {
+        const deviceId = cameraSelect.value;
+        resetInput();
+        const epoch = inputEpoch;
+        opening = true; buttons();
+        try {
+          if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error("이 화면에서는 카메라를 사용할 수 없습니다. GitHub Pages 주소를 Chrome 또는 Edge 새 창으로 열어주세요.");
+          status("브라우저의 카메라 사용 요청에서 '허용'을 눌러주세요.");
+          cameraHint = setTimeout(() => { if (epoch === inputEpoch && opening) status("카메라 응답을 기다리고 있습니다. 주소창 옆 카메라 권한을 확인해주세요."); }, 15000);
+          const acquired = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true, audio: false });
+          if (epoch !== inputEpoch) { acquired.getTracks().forEach((t) => t.stop()); return; }
+          stream = acquired; mode = "camera";
+          cameraName = stream.getVideoTracks()[0]?.label || "카메라";
+          frameStateSince = performance.now();
+          void refreshCameras(epoch);
+          video.hidden = false; $("frame").hidden = false; $("placeholder").hidden = true;
+          video.srcObject = stream;
+          await video.play();
+          if (epoch !== inputEpoch) return;
+          clearTimeout(cameraHint); opening = false; buttons();
+          for (const track of stream.getVideoTracks()) track.addEventListener("ended", () => { if (epoch === inputEpoch) { resetInput(); status("카메라 연결이 종료되었습니다.", true); } });
+          if (!model && !modelLoading && !autoAttempted) void connectModel();
+          else if (model) banner("준비 완료!", "'게임 시작'을 누르거나 Space 키를 누르세요.");
+          void cameraLoop(epoch);
+        } catch (error) { if (epoch === inputEpoch) { resetInput(); status(cameraError(error), true); } }
+      }
+
+      // ---------- 게임 ----------
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      let roundToken = 0;
+      function setCpu(move, shaking = false) {
+        $("cpu-hand").textContent = move ? MOVES[move].emoji : "❔";
+        $("cpu-hand").classList.toggle("shake", shaking);
+        $("cpu-name").textContent = move && !shaking ? MOVES[move].label : shaking ? "고르는 중…" : "대기 중";
+        $("cpu-label").textContent = move && !shaking ? MOVES[move].emoji + " " + MOVES[move].label : "—";
+        $("cpu-meter").style.width = move && !shaking ? "100%" : "0%";
+      }
+      function clearHighlights() { $("side-you").classList.remove("win"); $("side-cpu").classList.remove("win"); $("you-lock").hidden = true; }
+      function cancelRound(message) { roundToken++; phase = "idle"; $("countdown").textContent = ""; setCpu(null); banner("라운드 취소", message); buttons(); }
+      async function playRound() {
+        if (phase === "over") resetGame(false);
+        if (!model || mode !== "camera") return;
+        const token = ++roundToken;
+        phase = "countdown"; clearHighlights(); buttons(); renderScore();
+        banner("ROUND " + round, "손을 점선 안에 준비하세요!");
+        const order = Object.keys(MOVES); let shuffle = 0;
+        const shuffler = setInterval(() => setCpu(order[shuffle++ % 3], true), 90);
+        for (const word of COUNT_WORDS) {
+          if (token !== roundToken) { clearInterval(shuffler); return; }
+          $("countdown").textContent = word;
+          $("countdown").classList.remove("pop"); void $("countdown").offsetWidth; $("countdown").classList.add("pop");
+          word === COUNT_WORDS[COUNT_WORDS.length - 1] ? sfx.go() : sfx.tick();
+          await wait(COUNT_MS);
+        }
+        await wait(150); // '보!' 직후 손을 내밀 시간
+        clearInterval(shuffler);
+        if (token !== roundToken) return;
+        const cpu = order[Math.floor(Math.random() * order.length)];
+        setCpu(cpu);
+        const mine = current;
+        $("countdown").textContent = "";
+        if (!mine || !mine.move || mine.percent < threshold()) {
+          phase = "reveal"; buttons();
+          $("you-lock").hidden = false; $("you-lock").textContent = "🤔 인식 실패";
+          banner("다시!", "AI가 손 모양을 확신하지 못했어요(" + (mine ? mine.className + " " + mine.percent.toFixed(0) + "%" : "인식 없음") + "). 이번 판은 무효예요.", "draw");
+          addLog(null, cpu, "무효");
+          return;
+        }
+        $("you-lock").hidden = false; $("you-lock").textContent = MOVES[mine.move].emoji + " " + MOVES[mine.move].label + " " + mine.percent.toFixed(0) + "%";
+        let result;
+        if (mine.move === cpu) { result = "draw"; sfx.draw(); banner("무승부!", MOVES[mine.move].label + " vs " + MOVES[cpu].label + " · 한 번 더!", "draw"); }
+        else if (BEATS[mine.move] === cpu) { result = "win"; youScore++; $("side-you").classList.add("win"); sfx.win(); banner("승리! 🎉", MOVES[mine.move].label + "(이)가 " + MOVES[cpu].label + "을(를) 이겼어요.", "win"); }
+        else { result = "lose"; cpuScore++; $("side-cpu").classList.add("win"); sfx.lose(); banner("패배… 😵", MOVES[cpu].label + "에 졌어요. 다시 도전!", "lose"); }
+        addLog(mine.move, cpu, { win: "승", lose: "패", draw: "무" }[result], result);
+        if (result !== "draw") round++;
+        if (youScore >= target() || cpuScore >= target()) {
+          phase = "over";
+          if (youScore > cpuScore) { banner("🏆 최종 승리!", youScore + " : " + cpuScore + " · AI를 잘 학습시켰네요!", "win"); confetti(); setTimeout(sfx.champion, 600); }
+          else banner("💀 최종 패배", youScore + " : " + cpuScore + " · 다시 대결해볼까요?", "lose");
+        } else phase = "reveal";
+        renderScore(); buttons();
+      }
+      function addLog(mine, cpu, text, kind = "draw") {
+        $("log-empty").hidden = true;
+        const li = document.createElement("li");
+        const r = document.createElement("span"); r.className = "r"; r.textContent = "R" + round;
+        const vs = document.createElement("span");
+        vs.textContent = (mine ? MOVES[mine].emoji + " " + MOVES[mine].label : "🤔 인식 실패") + "  vs  " + MOVES[cpu].emoji + " " + MOVES[cpu].label;
+        const res = document.createElement("span"); res.className = "res " + kind; res.textContent = text;
+        li.append(r, vs, res);
+        $("log").prepend(li);
+      }
+      function resetGame(clearLog = true) {
+        roundToken++; phase = "idle"; round = 1; youScore = cpuScore = 0;
+        clearHighlights(); setCpu(null); $("countdown").textContent = "";
+        if (clearLog) { $("log").replaceChildren(); $("log-empty").hidden = false; }
+        banner(model && mode === "camera" ? "준비 완료!" : "준비되면 게임 시작!", model && mode === "camera" ? "'게임 시작'을 누르거나 Space 키를 누르세요." : "웹캠을 켜고 모델이 연결되면 시작할 수 있어요.");
+        renderScore(); buttons();
+      }
+
+      // ---------- 이벤트 ----------
+      $("camera-start").addEventListener("click", () => { void startCamera(); });
+      cameraSelect.addEventListener("change", () => { if (mode === "camera" || opening) void startCamera(); });
+      $("camera-stop").addEventListener("click", () => { resetInput(); status("카메라를 정지했습니다."); });
+      $("model-button").addEventListener("click", () => $("model-input").click());
+      $("model-input").addEventListener("change", () => {
+        const files = Array.from($("model-input").files); $("model-input").value = "";
+        if (files.length) void connectModel(files);
+      });
+      $("play").addEventListener("click", () => { void playRound(); });
+      $("reset").addEventListener("click", () => resetGame(true));
+      $("target").addEventListener("change", () => resetGame(true));
+      document.addEventListener("keydown", (e) => {
+        if (e.target.closest("input, select, textarea, button") || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.code === "Space") { e.preventDefault(); if (!$("play").disabled) $("play").click(); }
+      });
+      window.addEventListener("pagehide", resetInput);
+      navigator.mediaDevices?.addEventListener?.("devicechange", () => { void refreshCameras(); });
+      renderScore(); buttons();
+    })();
+  </script>
+</body>
+</html>
